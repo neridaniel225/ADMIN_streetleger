@@ -1696,28 +1696,47 @@ function slideForm(s){return `
 `;}
 
 // IMAGE UPLOAD — previewTarget peut être un ID (string) ou directement un élément DOM
-function hup(input,previewTarget,single=false){
-  Array.from(input.files).forEach(file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const src=e.target.result;
-      const pv=typeof previewTarget==='string'?$(previewTarget):previewTarget;
-      if(!pv)return;
-      if(single){
-        pv.innerHTML=`<div class="ic" style="width:110px;aspect-ratio:auto"><img src="${src}"/><button class="xi" onclick="this.closest('.ic').remove()" style="display:flex">✕</button></div>`;
-        if(typeof previewTarget==='string'){
-          const hv=$(previewTarget.replace(/-ip$/,'-iv').replace(/-lp$/,'-lv').replace(/-bp$/,'-bv').replace(/-fp$/,'-fv'));
-          if(hv)hv.value=src;
+async function uploadToStorage(file){
+  const ext = file.name.split('.').pop();
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error } = await sb.storage.from('product-images').upload(fileName, file, {
+    cacheControl: '3600',
+    upsert: false
+  });
+  if(error) throw error;
+  const { data } = sb.storage.from('product-images').getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
+async function hup(input, previewTarget, single = false) {
+  for (const file of Array.from(input.files)) {
+    try {
+      // Affiche un état "upload en cours" immédiatement
+      const pv = typeof previewTarget === 'string' ? $(previewTarget) : previewTarget;
+      if (pv && single) pv.innerHTML = `<div style="font-size:11px;color:var(--g)">⏳ Upload en cours…</div>`;
+
+      const url = await uploadToStorage(file);
+
+      if (!pv) continue;
+      if (single) {
+        pv.innerHTML = `<div class="ic" style="width:110px;aspect-ratio:auto"><img src="${url}"/><button class="xi" onclick="this.closest('.ic').remove()" style="display:flex">✕</button></div>`;
+        if (typeof previewTarget === 'string') {
+          const hv = $(previewTarget.replace(/-ip$/, '-iv').replace(/-lp$/, '-lv').replace(/-bp$/, '-bv').replace(/-fp$/, '-fv'));
+          if (hv) hv.value = url;
         }
       } else {
-        const cell=document.createElement('div');cell.className='ic';
-        cell.innerHTML=`<img src="${src}"/><button class="xi" onclick="this.closest('.ic').remove()" style="display:flex">✕</button>`;
+        const cell = document.createElement('div');
+        cell.className = 'ic';
+        cell.innerHTML = `<img src="${url}"/><button class="xi" onclick="this.closest('.ic').remove()" style="display:flex">✕</button>`;
         pv.appendChild(cell);
       }
-    };r.readAsDataURL(file);
-  });
+    } catch (err) {
+      console.error('Erreur upload:', err);
+      toast('Erreur upload image : ' + err.message, 'e');
+    }
+  }
 }
-function hupM(input,previewId){hup(input,previewId,false);}
+function hupM(input, previewId) { hup(input, previewId, false); }
 
 // MODAL
 let _mSave=null, _eidx=null;
